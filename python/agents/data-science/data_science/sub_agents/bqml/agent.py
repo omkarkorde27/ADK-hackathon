@@ -21,7 +21,7 @@ from google.adk.agents.callback_context import CallbackContext
 from dotenv import load_dotenv
 
 load_dotenv()
-api_key = os.getenv("API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 
 
 from data_science.sub_agents.bqml.tools import (

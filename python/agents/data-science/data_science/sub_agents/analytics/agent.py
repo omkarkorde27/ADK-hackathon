@@ -21,7 +21,7 @@ from .prompts import return_instructions_ds
 from dotenv import load_dotenv
 
 load_dotenv()
-api_key = os.getenv("API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 
 
 root_agent = Agent(
