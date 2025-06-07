@@ -18,11 +18,6 @@ from google.adk.agents import Agent
 from google.adk.tools import ToolContext
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.agents.callback_context import CallbackContext
-from dotenv import load_dotenv
-
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
-
 
 from data_science.sub_agents.bqml.tools import (
     check_bq_models,

@@ -32,10 +32,6 @@ from .sub_agents.bigquery.tools import (
 )
 from .prompts import return_instructions_root
 from .tools import call_db_agent, call_ds_agent
-from dotenv import load_dotenv
-
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
 
 date_today = date.today()
 

@@ -18,11 +18,6 @@ from google.adk.code_executors import VertexAiCodeExecutor
 from google.adk.agents import Agent
 from .prompts import return_instructions_ds
 
-from dotenv import load_dotenv
-
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
-
 
 root_agent = Agent(
     model=os.getenv("ANALYTICS_AGENT_MODEL"),
