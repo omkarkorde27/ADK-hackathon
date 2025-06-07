@@ -23,6 +23,10 @@ from google.genai import types
 from . import tools
 from .chase_sql import chase_db_tools
 from .prompts import return_instructions_bigquery
+from dotenv import load_dotenv
+
+load_dotenv()
+api_key = os.getenv("API_KEY")
 
 NL2SQL_METHOD = os.getenv("NL2SQL_METHOD", "BASELINE")
 
