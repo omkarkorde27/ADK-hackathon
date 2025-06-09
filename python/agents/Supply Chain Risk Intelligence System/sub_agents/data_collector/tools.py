@@ -13,10 +13,11 @@
 # limitations under the License.
 
 """
-Data Collector Sub-Agent Tools
+Data Collector Sub-Agent Tools - ADK Compatible Version
 
 This module contains all the tool functions for the DataCollectorAgent,
 including API fetchers, data normalizers, and publishing utilities.
+Fixed for ADK compatibility with proper type hints.
 """
 
 import asyncio
@@ -25,7 +26,7 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Any, Union
 from dataclasses import dataclass, asdict
 import base64
 
@@ -66,17 +67,40 @@ FRED_API_KEY = os.getenv("FRED_API_KEY")
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
 # Initialize clients
-publisher = pubsub_v1.PublisherClient()
-topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
+try:
+    publisher = pubsub_v1.PublisherClient()
+    topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
+    logger.info(f"Pub/Sub client initialized for topic: {topic_path}")
+except Exception as e:
+    logger.warning(f"Pub/Sub client initialization failed: {e}")
+    publisher = None
+    topic_path = None
 
 if TWITTER_BEARER_TOKEN:
-    twitter_client = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN)
+    try:
+        twitter_client = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN)
+        logger.info("Twitter client initialized")
+    except Exception as e:
+        logger.warning(f"Twitter client initialization failed: {e}")
+        twitter_client = None
+else:
+    twitter_client = None
 
 if DOCUMENTAI_PROCESSOR_ID:
-    documentai_client = documentai.DocumentProcessorServiceClient()
-    processor_name = documentai_client.processor_path(
-        PROJECT_ID, DOCUMENTAI_LOCATION, DOCUMENTAI_PROCESSOR_ID
-    )
+    try:
+        documentai_client = documentai.DocumentProcessorServiceClient()
+        processor_name = documentai_client.processor_path(
+            PROJECT_ID, DOCUMENTAI_LOCATION, DOCUMENTAI_PROCESSOR_ID
+        )
+        logger.info("Document AI client initialized")
+    except Exception as e:
+        logger.warning(f"Document AI client initialization failed: {e}")
+        documentai_client = None
+        processor_name = None
+else:
+    logger.warning("DOCUMENTAI_PROCESSOR_ID not configured - Document processing disabled")
+    documentai_client = None
+    processor_name = None
 
 @dataclass
 class SupplyChainEvent:
@@ -84,17 +108,23 @@ class SupplyChainEvent:
     source: str
     event_type: str
     timestamp: datetime
-    location: Optional[Dict[str, float]]  # {"lat": float, "lon": float}
-    severity: str  # "low", "medium", "high", "critical"
-    description: str
-    metadata: Dict[str, Any]
-    raw_data: Dict[str, Any]
-    geojson: Optional[Dict] = None
-    impact_score: Optional[float] = None
+    location: Dict[str, float] = None  # {"lat": float, "lon": float}
+    severity: str = "medium"  # "low", "medium", "high", "critical"
+    description: str = ""
+    metadata: Dict[str, Any] = None
+    raw_data: Dict[str, Any] = None
+    geojson: Dict = None
+    impact_score: float = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+        if self.raw_data is None:
+            self.raw_data = {}
 
 async def fetch_from_noaa(
     alert_types: str = "all",
-    region: Optional[str] = None,
+    region: str = None,
     tool_context: ToolContext = None
 ) -> Dict[str, Any]:
     """
@@ -205,7 +235,7 @@ async def fetch_from_noaa(
         return {"status": "error", "message": error_msg}
 
 async def fetch_from_gdelt(
-    keywords: Optional[List[str]] = None,
+    keywords: List[str] = None,
     timespan: str = "24h",
     max_records: int = 100,
     tool_context: ToolContext = None
@@ -222,17 +252,19 @@ async def fetch_from_gdelt(
     Returns:
         Collection results with events and metadata
     """
+    if keywords is None:
+        keywords = get_supply_chain_keywords()
+    
     logger.info(f"Fetching GDELT data - Keywords: {keywords}, Timespan: {timespan}")
     
     events = []
-    search_keywords = keywords or get_supply_chain_keywords()
     
     try:
         # GDELT Event Database API
         base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
         
         # Build query from keywords
-        query_terms = " OR ".join([f'"{term}"' for term in search_keywords[:10]])  # Limit keywords
+        query_terms = " OR ".join([f'"{term}"' for term in keywords[:10]])  # Limit keywords
         
         params = {
             "query": query_terms,
@@ -295,7 +327,7 @@ async def fetch_from_gdelt(
             "source": "GDELT",
             "events_collected": len(events),
             "events": [asdict(event) for event in events],
-            "search_keywords": search_keywords[:10],
+            "search_keywords": keywords[:10],
             "timestamp": datetime.utcnow().isoformat()
         }
         
@@ -309,8 +341,8 @@ async def fetch_from_gdelt(
         return {"status": "error", "message": error_msg}
 
 async def fetch_from_marinetraffic(
-    ports: Optional[List[str]] = None,
-    vessel_types: Optional[List[str]] = None,
+    ports: List[str] = None,
+    vessel_types: List[str] = None,
     tool_context: ToolContext = None
 ) -> Dict[str, Any]:
     """
@@ -420,7 +452,7 @@ async def fetch_from_marinetraffic(
         return {"status": "error", "message": error_msg}
 
 async def fetch_from_fred(
-    indicators: Optional[List[str]] = None,
+    indicators: List[str] = None,
     change_threshold: float = 2.0,
     tool_context: ToolContext = None
 ) -> Dict[str, Any]:
@@ -538,7 +570,7 @@ async def fetch_from_fred(
         return {"status": "error", "message": error_msg}
 
 async def fetch_from_twitter(
-    keywords: Optional[List[str]] = None,
+    keywords: List[str] = None,
     max_results: int = 100,
     include_retweets: bool = False,
     tool_context: ToolContext = None
@@ -555,18 +587,20 @@ async def fetch_from_twitter(
     Returns:
         Collection results with events and metadata
     """
+    if keywords is None:
+        keywords = get_supply_chain_keywords()
+    
     logger.info(f"Fetching Twitter data - Keywords: {keywords}, Max results: {max_results}")
     
-    if not TWITTER_BEARER_TOKEN:
-        logger.warning("Twitter Bearer Token not configured")
+    if not TWITTER_BEARER_TOKEN or twitter_client is None:
+        logger.warning("Twitter Bearer Token not configured or client not initialized")
         return {"status": "error", "message": "Twitter Bearer Token not configured"}
     
     events = []
-    search_keywords = keywords or get_supply_chain_keywords()
     
     try:
         # Build search query
-        query_terms = " OR ".join([f'"{term}"' for term in search_keywords[:10]])  # Limit keywords
+        query_terms = " OR ".join([f'"{term}"' for term in keywords[:10]])  # Limit keywords
         query = f"({query_terms}) lang:en"
         
         if not include_retweets:
@@ -597,7 +631,7 @@ async def fetch_from_twitter(
                     location = {"lat": coords[1], "lon": coords[0]}
             
             # Calculate relevance score
-            relevance_score = _calculate_tweet_relevance(tweet.text, search_keywords)
+            relevance_score = _calculate_tweet_relevance(tweet.text, keywords)
             
             # Only include highly relevant tweets
             if relevance_score >= 5:
@@ -633,7 +667,7 @@ async def fetch_from_twitter(
             "events_collected": len(events),
             "events": [asdict(event) for event in events],
             "tweets_processed": tweet_count,
-            "search_keywords": search_keywords[:10],
+            "search_keywords": keywords[:10],
             "timestamp": datetime.utcnow().isoformat()
         }
         
@@ -734,6 +768,13 @@ async def publish_to_pubsub(
             "message": "No events provided for publishing"
         }
     
+    if not publisher or not topic_path:
+        logger.warning("Pub/Sub publisher not initialized")
+        return {
+            "status": "error",
+            "message": "Pub/Sub publisher not initialized"
+        }
+    
     try:
         published_count = 0
         failed_count = 0
@@ -788,108 +829,6 @@ async def publish_to_pubsub(
         
     except Exception as e:
         error_msg = f"Error publishing to Pub/Sub: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "message": error_msg}
-
-async def process_documents(
-    document_urls: List[str],
-    max_documents: int = 10,
-    tool_context: ToolContext = None
-) -> Dict[str, Any]:
-    """
-    Process documents using Google Cloud Document AI
-    
-    Args:
-        document_urls: List of document URLs to process
-        max_documents: Maximum number of documents to process
-        tool_context: ADK tool context
-        
-    Returns:
-        Processing results with extracted events
-    """
-    logger.info(f"Processing {len(document_urls)} documents with Document AI")
-    
-    if not DOCUMENTAI_PROCESSOR_ID:
-        logger.warning("Document AI processor not configured")
-        return {"status": "error", "message": "Document AI processor not configured"}
-    
-    events = []
-    processed_count = 0
-    failed_count = 0
-    
-    # Limit the number of documents to process
-    document_urls = document_urls[:max_documents]
-    
-    try:
-        for url in document_urls:
-            try:
-                # Download document
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=30) as response:
-                        if response.status == 200:
-                            document_content = await response.read()
-                            
-                            # Process with Document AI
-                            document = documentai.Document(
-                                content=document_content,
-                                mime_type=response.headers.get('content-type', 'application/pdf')
-                            )
-                            
-                            request = documentai.ProcessRequest(
-                                name=processor_name,
-                                document=document
-                            )
-                            
-                            result = documentai_client.process_document(request=request)
-                            extracted_text = result.document.text
-                            
-                            # Analyze for supply chain content
-                            if _is_supply_chain_relevant(extracted_text):
-                                event = SupplyChainEvent(
-                                    source="DocumentAI",
-                                    event_type="document_analysis",
-                                    timestamp=datetime.utcnow(),
-                                    location=None,
-                                    severity=_analyze_document_severity(extracted_text),
-                                    description=f"Supply chain relevant document processed: {url}",
-                                    metadata={
-                                        "document_url": url,
-                                        "text_length": len(extracted_text),
-                                        "confidence": getattr(result.document, 'confidence', 0.5),
-                                        "mime_type": response.headers.get('content-type', 'application/pdf')
-                                    },
-                                    raw_data={"extracted_text": extracted_text[:1000]}  # Limit size
-                                )
-                                events.append(event)
-                            
-                            processed_count += 1
-                        else:
-                            logger.warning(f"Failed to download document {url}: {response.status}")
-                            failed_count += 1
-                            
-            except Exception as e:
-                logger.error(f"Error processing document {url}: {str(e)}")
-                failed_count += 1
-        
-        # Update tool context
-        if tool_context:
-            stats = tool_context.state.setdefault("collection_stats", {})
-            stats["documents_processed"] = stats.get("documents_processed", 0) + processed_count
-            stats["document_events"] = stats.get("document_events", 0) + len(events)
-        
-        logger.info(f"Processed {processed_count} documents, generated {len(events)} events")
-        
-        return {
-            "status": "success",
-            "documents_processed": processed_count,
-            "documents_failed": failed_count,
-            "events_generated": len(events),
-            "events": [asdict(event) for event in events],
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        error_msg = f"Error in document processing: {str(e)}"
         logger.error(error_msg)
         return {"status": "error", "message": error_msg}
 
@@ -1004,7 +943,7 @@ async def collect_all_sources(
 
 async def emergency_collect(
     crisis_keywords: List[str],
-    geographic_focus: Optional[str] = None,
+    geographic_focus: str = None,
     max_events_per_source: int = 200,
     tool_context: ToolContext = None
 ) -> Dict[str, Any]:
@@ -1163,34 +1102,3 @@ def _calculate_tweet_relevance(text: str, keywords: List[str]) -> int:
         score += 2
     
     return min(score, 10)
-
-def _is_supply_chain_relevant(text: str) -> bool:
-    """Check if document text is relevant to supply chain"""
-    keywords = get_supply_chain_keywords()
-    text_lower = text.lower()
-    
-    # Check for direct keyword matches
-    direct_matches = sum(1 for keyword in keywords if keyword.lower() in text_lower)
-    
-    # Check for supply chain related terms
-    sc_terms = ["supply chain", "logistics", "manufacturing", "shipping", "transportation", "procurement"]
-    sc_matches = sum(1 for term in sc_terms if term in text_lower)
-    
-    return direct_matches >= 2 or sc_matches >= 1
-
-def _analyze_document_severity(text: str) -> str:
-    """Analyze document text to determine severity level"""
-    text_lower = text.lower()
-    
-    critical_terms = ["emergency", "critical", "severe", "major disruption", "complete shutdown"]
-    high_terms = ["significant", "substantial", "important", "delay", "closure"]
-    medium_terms = ["moderate", "minor", "slight", "temporary"]
-    
-    if any(term in text_lower for term in critical_terms):
-        return "critical"
-    elif any(term in text_lower for term in high_terms):
-        return "high"
-    elif any(term in text_lower for term in medium_terms):
-        return "medium"
-    else:
-        return "low"
