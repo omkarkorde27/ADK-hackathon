@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from google.adk.tools import ToolContext
 from google.adk.tools.agent_tool import AgentTool
-from .sub_agents import data_collector_agent
+from ..sub_agents import data_collector_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,8 +27,6 @@ async def trigger_data_collection(
     Returns:
         Collection results and summary
     """
-    from google.adk.tools.agent_tool import AgentTool
-    
     logger.info(f"Triggering data collection - Sources: {sources}, Emergency: {emergency_mode}")
     
     try:

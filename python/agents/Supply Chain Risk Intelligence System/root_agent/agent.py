@@ -9,15 +9,14 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import load_artifacts
 from .prompts import return_instructions_root
 from .tools import trigger_data_collection
+from sub_agents import data_collector_agent
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 COLLECTION_FREQUENCY = int(os.getenv("COLLECTION_FREQUENCY", "300")) 
 
@@ -52,8 +51,6 @@ def setup_before_agent_call(callback_context: CallbackContext):
     
     **Available Sub-Agents:**
     - DataCollectorAgent: Real-time data ingestion from external APIs
-    - AnalysisAgent: Risk analysis and pattern recognition (placeholder)
-    - AlertAgent: Alert generation and management (placeholder)
     """
     )
     
@@ -71,7 +68,7 @@ root_agent = Agent(
     Project ID: {PROJECT_ID}
     Collection frequency: {COLLECTION_FREQUENCY} seconds
     """),
-    sub_agents=[data_collector_agent],  # Add other sub-agents as they're implemented
+    sub_agents=[data_collector_agent],  # Now this import exists
     tools=[
         trigger_data_collection,
         load_artifacts,
