@@ -1,28 +1,16 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright 2025 Google LLC - Simplified ADK Compatible Version
 
 """
 Data Collector Sub-Agent for Supply Chain Risk Intelligence System
 
 This agent specializes in real-time data ingestion from multiple external APIs,
 data normalization, and publishing to Pub/Sub for downstream processing.
+Simplified for ADK compatibility.
 """
 
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Any, List
 
 from google.adk.agents import Agent
 from google.adk.agents.callback_context import CallbackContext
@@ -37,7 +25,6 @@ from .tools import (
     fetch_from_twitter,
     normalize_to_geojson,
     publish_to_pubsub,
-    process_documents,
     collect_all_sources,
     emergency_collect
 )
@@ -120,7 +107,6 @@ root_agent = Agent(
         fetch_from_twitter,
         normalize_to_geojson,
         publish_to_pubsub,
-        process_documents,
         collect_all_sources,
         emergency_collect
     ],
